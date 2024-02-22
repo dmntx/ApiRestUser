@@ -4,20 +4,23 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
+using Newtonsoft.Json;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Net;
 using System.IO;
-
-using Newtonsoft.Json;
+using Microsoft.Win32;
 
 namespace ApiRestUser
 {
     public partial class Form1 : Form
     {
         HttpClient client = new HttpClient();
+        string urlIn = "http://localhost:8000/api/v1/newUser/Practicante";
+        String urlOut = "http://localhost:8000/api/v1/modUser/Practicante/1";
+        String showUser = "http://localhost:8000/api/v1/obtenerUser/Practicante/";
         public Form1()
         {
             InitializeComponent();
@@ -28,47 +31,6 @@ namespace ApiRestUser
             
         }
 
-        private void Mostrar()
-        {
-            try
-            {
-                //Para uso del Servidor "Servicios Digitales Plus"
-                String url = textBox6.Text;
-
-                String line = GetHttp(url); //Se obtienen los mensajes
-                //richTextBox1.Text = line;
-
-                //Conversión de una cadena JSON en un objeto
-                Root obj = JsonConvert.DeserializeObject<Root>(line);
-
-                String cadux = "";
-
-                    if (obj != null)
-                    {
-                        for (int i = 0; i < obj.Alumnos.Count; i++)
-                        {
-
-                                //Para mostrar el mensaje que se está validando
-                                cadux += "|  " + obj.Alumnos[i].id + "     |   ";
-
-                                //Para mostrar la fecha del envío
-                                cadux += obj.Alumnos[i].nombre + "   |   ";
-                                cadux += obj.Alumnos[i].apellidoP + "   |   ";
-                                cadux += obj.Alumnos[i].apellidoM + "   |   ";
-                                cadux += obj.Alumnos[i].grado + "  | \n";
-
-                            //Con esto se empiezan a leer todos los mensajes
-                            //richTextBox1.Text += obj.Chat[i].descripcion + "\n";
-                    }
-                    //richTextBox1.Rtf = cadux;
-                    richTextBox1.Text = cadux;
-                    }
-                }
-            catch
-            {
-
-            }
-        }
         public String GetHttp(String url)
         {
             WebRequest wr = WebRequest.Create(url);
@@ -79,10 +41,146 @@ namespace ApiRestUser
             return sr.ReadToEnd().Trim();
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private async void button1_Click(object sender, EventArgs e)
         {
-            Mostrar();
+
+            string apiUrl = "http://localhost:8000/api/v1/obtenerUser/Practicante/" + textBox7.Text;
+
+            try
+            {
+                List<Practicante> jsonResponse = await GetApiResponse(apiUrl);
+                string[] text = new string[11];
+                // Aquí puedes trabajar con los datos, por ejemplo, mostrarlos en un cuadro de texto
+                //textBox1.Text = jsonResponse[0];
+                foreach (var practicante in jsonResponse)
+                {
+                    textBox1.Text = Convert.ToString(DateTime.Now);
+                    textBox2.Text = practicante.nombre_completo;
+                    textBox3.Text = practicante.carrera;
+                    textBox4.Text = practicante.hora_llegada;
+                    textBox5.Text = practicante.hora_salida;
+                    text[0] = practicante.id;
+                    text[1] = practicante.nombre_completo;
+                    text[2] = practicante.carrera;
+                    text[3] = practicante.codigo;
+                    text[4] = practicante.fecha;
+                    text[5] = practicante.hora_llegada;
+                    text[6] = practicante.hora_salida;
+                    text[7] = practicante.horas_trabajadas;
+                    text[8] = practicante.minutos_trabajados;
+                    text[9] = practicante.total_horas;
+                    text[10] = practicante.horas_extras;
+
+                }
+                List<PracticanteSimple> practicantesSimples = SeleccionarDatos(jsonResponse);
+                await EnviarDatos(text);
+                
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
+
+
+        static async Task<List<Practicante>> GetApiResponse(string apiUrl)
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                HttpResponseMessage response = await client.GetAsync(apiUrl);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    string jsonResponse = await response.Content.ReadAsStringAsync();
+                    return JsonConvert.DeserializeObject<List<Practicante>>(jsonResponse);
+                }
+                else
+                {
+                    throw new HttpRequestException($"La solicitud al API falló con el código de estado: {response.StatusCode}");
+                }
+            }
+        }
+
+        private List<PracticanteSimple> SeleccionarDatos(List<Practicante> practicantes)
+        {
+            // Crear una lista de PracticanteSimple con solo los campos necesarios
+            List<PracticanteSimple> practicantesSimples = new List<PracticanteSimple>();
+            foreach (var practicante in practicantes)
+            {
+                practicantesSimples.Add(new PracticanteSimple
+                {
+                    nombre_completo = practicante.nombre_completo,
+                    carrera = practicante.carrera,
+                    codigo = Convert.ToString(DateTime.Now),
+                    fecha = practicante.fecha,
+                    hora_llegada = Convert.ToString(DateTime.Now),
+                    hora_salida = Convert.ToString(DateTime.Now),
+                    horas_trabajadas = "0",
+                    minutos_trabajados = "0",
+                    total_horas = "0",
+                    horas_extras = "0"
+                    
+                    // Agregar otros campos necesarios
+                });
+            }
+            return practicantesSimples;
+        }
+
+        static async Task EnviarDatos(string[] practicantes)
+        {
+                // Crear el contenido del formulario
+                var formData = new MultipartFormDataContent();
+            DateTime horaActual = DateTime.Now;
+            DateTime fechaActual = DateTime.Now;
+            string hora = horaActual.ToString("HH:mm:ss");
+            string fecha = fechaActual.ToString("yyyy-MM-dd");
+            // Agregar campos al formulario
+            formData.Add(new StringContent(practicantes[1], Encoding.UTF8), "nombre_completo");
+            formData.Add(new StringContent(practicantes[2], Encoding.UTF8), "carrera");
+            formData.Add(new StringContent(practicantes[3], Encoding.UTF8), "codigo");
+            formData.Add(new StringContent(fecha, Encoding.UTF8), "fecha");
+            formData.Add(new StringContent(hora, Encoding.UTF8), "hora_llegada");
+            formData.Add(new StringContent(hora, Encoding.UTF8), "hora_salida");
+                
+            formData.Add(new StringContent(practicantes[7], Encoding.UTF8), "horas_trabajadas");
+            formData.Add(new StringContent(practicantes[8], Encoding.UTF8), "minutos_trabajados");
+            formData.Add(new StringContent(practicantes[9], Encoding.UTF8), "total_horas");
+            formData.Add(new StringContent(practicantes[10], Encoding.UTF8), "horas_extras");
+
+                // Opcionalmente, agregar archivos al formulario
+                //formData.Add(new ByteArrayContent(File.ReadAllBytes("archivo.txt")), "archivo", "archivo.txt");
+
+                // Crear el cliente HTTP
+                using (var client = new HttpClient())
+                {
+                    try
+                    {
+                        // Enviar la solicitud POST a la URL de destino
+                        HttpResponseMessage response = await client.PostAsync("http://localhost:8000/api/v1/newUser/Practicante", formData);
+
+                        // Leer la respuesta
+                        string responseBody = await response.Content.ReadAsStringAsync();
+
+                        // Imprimir la respuesta
+                        Console.WriteLine(responseBody);
+
+                        // Verificar si la solicitud fue exitosa
+                        if (response.IsSuccessStatusCode)
+                        {
+                            Console.WriteLine("La solicitud fue exitosa.");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"La solicitud falló con el código de estado: {response.StatusCode}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error: {ex.Message}");
+                    }
+            }
+        }
+
 
         private void Form1_Load(object sender, EventArgs e)
         {
@@ -93,184 +191,92 @@ namespace ApiRestUser
  
         }
 
-        private void button5_Click(object sender, EventArgs e)
+        private async void button5_Click(object sender, EventArgs e)
         {
-            MostrarId();
-        }
-        private void MostrarId()
-        {
-            try
+            string url = "http://localhost:8000/api/v1/modUser/Practicante/1";
+            DateTime horaActual = DateTime.Now;
+            string hora = horaActual.ToString("HH:mm:ss");
+            // Parámetros a enviar
+            var parametros = new Dictionary<string, string>
             {
-                //Para uso del Servidor "Servicios Digitales Plus"
-                String url = textBox6.Text + "?id=" + textBox7.Text;
+                { "codigo", textBox7.Text },
+                { "hora_salida", hora }
+            };
 
-                String line = GetHttp(url); //Se obtienen los mensajes
-                //richTextBox1.Text = line;
-
-                //Conversión de una cadena JSON en un objeto
-                Root obj = JsonConvert.DeserializeObject<Root>(line);
-
-                String cadux = "";
-
-                if (obj != null)
+            // Crear el cliente HTTP
+            using (HttpClient client = new HttpClient())
+            {
+                try
                 {
-                    for (int i = 0; i < obj.Alumnos.Count; i++)
+                    // Crear el contenido de la solicitud con los parámetros
+                    var content = new FormUrlEncodedContent(parametros);
+
+                    // Concatenar los parámetros a la URL (opcional)
+                    url += "?codigo="+textBox7.Text+"&hora_salida=" + hora +" ";
+
+                    // Realizar la solicitud PUT
+                    HttpResponseMessage response = await client.PutAsync(url, content);
+
+                    // Verificar si la solicitud fue exitosa
+                    if (response.IsSuccessStatusCode)
                     {
-
-                        //Para mostrar el mensaje que se está validando
-                        cadux += "|  " + obj.Alumnos[i].id + "     |   ";
-
-                        //Para mostrar la fecha del envío
-                        cadux += obj.Alumnos[i].nombre + "   |   ";
-                        cadux += obj.Alumnos[i].apellidoP + "   |   ";
-                        cadux += obj.Alumnos[i].apellidoM + "   |   ";
-                        cadux += obj.Alumnos[i].grado + "  | \n";
-
-                        //Con esto se empiezan a leer todos los mensajes
-                        //richTextBox1.Text += obj.Chat[i].descripcion + "\n";
-                    }
-                    //richTextBox1.Rtf = cadux;
-                    richTextBox1.Text = cadux;
-                }
-            }
-            catch
-            {
-
-            }
-        }
-
-        private void button2_Click(object sender, EventArgs e)
-        {
-            Insertar();
-        }
-
-        public void Insertar()
-        {
-            if(textBox1.Text == ""|| textBox2.Text =="" || textBox3.Text == "" || textBox4.Text == "" || textBox5.Text == "")
-            {
-                MessageBox.Show("Faltan Datos");
-            }
-            else
-            {
-                string url = "http://localhost:8080/Examen3/service.php";
-                var request = (HttpWebRequest)WebRequest.Create(url);
-
-                var postData = "id=" + Uri.EscapeDataString(textBox1.Text);
-                postData += "&nombre=" + Uri.EscapeDataString(textBox2.Text);
-                postData += "&apellidoP=" + Uri.EscapeDataString(textBox3.Text);
-                postData += "&apellidoM=" + Uri.EscapeDataString(textBox4.Text);
-                postData += "&grado=" + Uri.EscapeDataString(textBox5.Text);
-                var data = Encoding.ASCII.GetBytes(postData);
-
-                request.Method = "POST";
-                request.ContentType = "application/x-www-form-urlencoded";
-                request.ContentLength = data.Length;
-
-                using (var stream = request.GetRequestStream())
-                {
-                    stream.Write(data, 0, data.Length);
-                }
-
-                var response = (HttpWebResponse)request.GetResponse();
-
-                textBox1.Text = "";
-                textBox2.Text = "";
-                textBox3.Text = "";
-                textBox4.Text = "";
-                textBox5.Text = "";
-            }
-
-        }
-
-        private void button3_Click(object sender, EventArgs e)
-        {
-            Actualizar();
-        }
-
-        private void Actualizar()
-        {
-           /* if (textBox1.Text == "" || textBox2.Text == "" || textBox3.Text == "" || textBox4.Text == "" || textBox5.Text == "")
-            {
-                MessageBox.Show("Faltan Datos");
-            }
-            else
-            {*/
-                // Crea la URL del endpoint
-                string url = "http://localhost:8080/Examen3/service.php?";
-
-                // Crea un objeto que contiene los datos a actualizar en el API RESTful
-                string data = "id=2222222&nombre=222222&apellidoP=22222221&apellidoM=2222221&grado=22222221";
-
-                // Convierte los datos en un arreglo de bytes
-                byte[] postData = Encoding.UTF8.GetBytes(data);
-
-                // Crea una instancia de la clase HttpWebRequest
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-
-                // Configura la solicitud para utilizar el método PUT
-                request.Method = "PUT";
-                request.ContentType = "application/x-www-form-urlencoded";
-                request.ContentLength = postData.Length;
-
-                // Escribe los datos en la solicitud
-                using (var stream = request.GetRequestStream())
-                {
-                    stream.Write(postData, 0, postData.Length);
-                }
-
-                // Obtiene la respuesta del servidor
-                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-                {
-                    // Verifica si la solicitud se completó correctamente
-                    if (response.StatusCode == HttpStatusCode.OK)
-                    {
-                        // La solicitud se completó correctamente
+                        MessageBox.Show("La solicitud PUT fue exitosa.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     else
                     {
-                        // La solicitud no se completó correctamente
+                        MessageBox.Show($"La solicitud PUT falló con el código de estado: {response.StatusCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
-
-
-           // }
-        }
-
-        private void button4_Click(object sender, EventArgs e)
-        {
-            Eliminar();
-        }
-
-        private void Eliminar()
-        {
-            if(textBox1.Text == "")
-            {
-                MessageBox.Show("Faltan Datos");
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
-            else
-            {
-                string url = "http://localhost:8080/Examen3/service.php?id=" + textBox1.Text;
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-                request.Method = "DELETE";
-                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-                Stream dataStream = response.GetResponseStream();
-                StreamReader reader = new StreamReader(dataStream);
-                string responseFromServer = reader.ReadToEnd();
             }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+           // Insertar();
         }
+        private void button3_Click(object sender, EventArgs e)
+        {
+            //Actualizar();
+        }
+        
     }
 
-    public class Alumnos
+    public class Practicante
     {
         public string id { get; set; }
-        public string nombre { get; set; }
-        public string apellidoP { get; set; }
-        public string apellidoM { get; set; }
-        public string grado { get; set; }
+        public string nombre_completo { get; set; }
+        public string carrera { get; set; }
+        public string codigo { get; set; }
+        public string fecha { get; set; }
+        public string hora_llegada { get; set; }
+        public string hora_salida { get; set; }
+        public string horas_trabajadas { get; set; }
+        public string minutos_trabajados { get; set; }
+        public string total_horas { get; set; }
+        public string horas_extras { get; set; }
+        public string created_at { get; set; }
+        public string updated_at { get; set; }
+    }
+    public class PracticanteSimple
+    {
+        public string nombre_completo { get; set; }
+        public string carrera { get; set; }
+        public string codigo { get; set; }
+        public string fecha { get; set; }
+        public string hora_llegada { get; set; }
+        public string hora_salida { get; set; }
+        public string horas_trabajadas { get; set; }
+        public string minutos_trabajados { get; set; }
+        public string total_horas { get; set; }
+        public string horas_extras { get; set; }
     }
 
     public class Root
     {
-        public List<Alumnos> Alumnos{ get; set; }
+        public List<Practicante> Practicante{ get; set; }
     }
 }
